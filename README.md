@@ -1,2 +1,4 @@
-# graphql-course-ariadne
-This is the project from the course in Udemy but written in Python's Ariadne
+
+# Ariadne Training Project (In Progress)
+
+This is the project from the Udemy course [The Modern GraphQL Bootcamp](https://www.udemy.com/course/graphql-bootcamp/) but written in Python's Ariadne.
