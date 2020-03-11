@@ -1,6 +1,13 @@
 from typing import List, Dict
+from uuid import uuid4
 
-from ariadne import QueryType, ObjectType, gql, make_executable_schema
+from ariadne import (
+    QueryType,
+    MutationType,
+    ObjectType,
+    gql,
+    make_executable_schema,
+)
 from ariadne.asgi import GraphQL
 
 # Demo user data
@@ -140,6 +147,10 @@ type_defs = gql("""
         comments: [Comment!]!
     }
 
+    type Mutation {
+        createUser(name: String!, email: String!, age: Int): User!
+    }
+
     type Post {
         id: ID!
         title: String!
@@ -167,6 +178,7 @@ type_defs = gql("""
 """)
 
 query = QueryType()
+mutation = MutationType()
 post = ObjectType("Post")
 user = ObjectType("User")
 comment = ObjectType("Comment")
@@ -217,6 +229,21 @@ def resolve_comments(*_):
     return comments
 
 
+@mutation.field("createUser")
+def resolve_create_user(_, info, name: str, email: str, age: int = None):
+    email_taken = len([user for user in users if user['email'] == email]) > 0
+    if email_taken:
+        raise ValueError("Email taken.")
+    user = {
+        'id': uuid4(),
+        'name': name,
+        'email': email,
+        'age': age,
+    }
+    users.append(user)
+    return user
+
+
 @user.field("posts")
 def resolve_user_posts(parent: dict, _):
     return [pst for pst in posts if pst['author'] == parent['id']]
@@ -256,6 +283,7 @@ def resolve_comment_post(parent: dict, _):
 schema = make_executable_schema(
     type_defs,
     query,
+    mutation,
     user,
     post,
     comment,
