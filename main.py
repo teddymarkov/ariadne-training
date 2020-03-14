@@ -149,6 +149,12 @@ type_defs = gql("""
 
     type Mutation {
         createUser(name: String!, email: String!, age: Int): User!
+        createPost(
+            title: String!, body: String!, published: Boolean!, author: ID!
+        ): Post!
+        createComment(
+            text: String!, author: ID!, post: ID!
+        ): Comment!
     }
 
     type Post {
@@ -234,14 +240,54 @@ def resolve_create_user(_, info, name: str, email: str, age: int = None):
     email_taken = len([user for user in users if user['email'] == email]) > 0
     if email_taken:
         raise ValueError("Email taken.")
-    user = {
+    usr = {
         'id': uuid4(),
         'name': name,
         'email': email,
         'age': age,
     }
-    users.append(user)
-    return user
+    users.append(usr)
+    return usr
+
+
+@mutation.field("createPost")
+def resolve_create_post(
+        _,
+        info,
+        title: str,
+        body: str,
+        published: bool,
+        author: str
+):
+    user_exists = len([usr for usr in users if usr['id'] == author]) > 0
+    if not user_exists:
+        raise ValueError('Author not found.')
+    pst = {
+        'id': uuid4(),
+        'title': title,
+        'body': body,
+        'author': author,
+    }
+    posts.append(pst)
+    return pst
+
+
+@mutation.field("createComment")
+def resolve_create_comment(_, info, text: str, author: str, post: str):
+    user_exists = len([usr for usr in users if usr['id'] == author]) > 0
+    if not user_exists:
+        raise ValueError('Author not found.')
+    post_exists = len([pst for pst in posts if pst['id'] == post]) > 0
+    if not post_exists:
+        raise ValueError('Post not found.')
+    cmt = {
+        'id': uuid4(),
+        'text': text,
+        'post': post,
+        'author': author,
+    }
+    comments.append(cmt)
+    return cmt
 
 
 @user.field("posts")
@@ -251,7 +297,7 @@ def resolve_user_posts(parent: dict, _):
 
 @user.field("comments")
 def resolve_user_comments(parent: dict, _):
-    return [cmnt for cmnt in comments if cmnt['author'] == parent['id']]
+    return [cmt for cmt in comments if cmt['author'] == parent['id']]
 
 
 @post.field("author")
@@ -263,7 +309,7 @@ def resolve_post_author(parent: dict, _):
 
 @post.field("comments")
 def resolve_post_comments(parent: dict, _):
-    return [cmnt for cmnt in comments if cmnt['post'] == parent['id']]
+    return [cmt for cmt in comments if cmt['post'] == parent['id']]
 
 
 @comment.field("author")
