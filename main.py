@@ -148,13 +148,28 @@ type_defs = gql("""
     }
 
     type Mutation {
-        createUser(name: String!, email: String!, age: Int): User!
-        createPost(
-            title: String!, body: String!, published: Boolean!, author: ID!
-        ): Post!
-        createComment(
-            text: String!, author: ID!, post: ID!
-        ): Comment!
+        createUser(data: CreateUserInput): User!
+        createPost(data: CreatePostInput): Post!
+        createComment(data: CreateCommentInput): Comment!
+    }
+    
+    input CreateUserInput {
+        name: String!
+        email: String!
+        age: Int
+    }
+    
+    input CreatePostInput {
+        title: String!
+        body: String!
+        published: Boolean!
+        author: ID!
+    }
+    
+    input CreateCommentInput {
+        text: String!
+        author: ID!
+        post: ID!
     }
 
     type Post {
@@ -236,55 +251,48 @@ def resolve_comments(*_):
 
 
 @mutation.field("createUser")
-def resolve_create_user(_, info, name: str, email: str, age: int = None):
-    email_taken = len([user for user in users if user['email'] == email]) > 0
+def resolve_create_user(*_, data):
+    email_taken = len(
+        [user for user in users if user['email'] == data['email']]
+    ) > 0
     if email_taken:
         raise ValueError("Email taken.")
     usr = {
         'id': uuid4(),
-        'name': name,
-        'email': email,
-        'age': age,
+        **data,
     }
     users.append(usr)
     return usr
 
 
 @mutation.field("createPost")
-def resolve_create_post(
-        _,
-        info,
-        title: str,
-        body: str,
-        published: bool,
-        author: str
-):
-    user_exists = len([usr for usr in users if usr['id'] == author]) > 0
+def resolve_create_post(*_, data):
+    user_exists = len(
+        [usr for usr in users if usr['id'] == data['author']]
+    ) > 0
     if not user_exists:
         raise ValueError('Author not found.')
     pst = {
         'id': uuid4(),
-        'title': title,
-        'body': body,
-        'author': author,
+        **data,
     }
     posts.append(pst)
     return pst
 
 
 @mutation.field("createComment")
-def resolve_create_comment(_, info, text: str, author: str, post: str):
-    user_exists = len([usr for usr in users if usr['id'] == author]) > 0
+def resolve_create_comment(*_, data):
+    user_exists = len(
+        [usr for usr in users if usr['id'] == data['author']]
+    ) > 0
     if not user_exists:
         raise ValueError('Author not found.')
-    post_exists = len([pst for pst in posts if pst['id'] == post]) > 0
+    post_exists = len([pst for pst in posts if pst['id'] == data['post']]) > 0
     if not post_exists:
         raise ValueError('Post not found.')
     cmt = {
         'id': uuid4(),
-        'text': text,
-        'post': post,
-        'author': author,
+        **data,
     }
     comments.append(cmt)
     return cmt
