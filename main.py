@@ -1,6 +1,8 @@
 from typing import List, Dict
 from uuid import uuid4
 
+from more_itertools import first_true
+
 from ariadne import (
     QueryType,
     MutationType,
@@ -149,8 +151,11 @@ type_defs = gql("""
 
     type Mutation {
         createUser(data: CreateUserInput): User!
+        deleteUser(id: ID!): User!
         createPost(data: CreatePostInput): Post!
+        deletePost(id: ID!): User!
         createComment(data: CreateCommentInput): Comment!
+        deleteComment(id: ID!): User!
     }
     
     input CreateUserInput {
@@ -226,7 +231,7 @@ def resolve_post(*_):
 
 
 @query.field("users")
-def resolve_users(*_, name: str = None):
+def resolve_users(*_, name: str = ""):
     if name:
         return filter(
             lambda usr: usr['name'].lower() == name.lower(),
@@ -236,13 +241,11 @@ def resolve_users(*_, name: str = None):
 
 
 @query.field("posts")
-def resolve_posts(*_, title: str = None):
-    if title:
-        return filter(
-            lambda pst: title.lower() in pst['title'].lower(),
-            posts
-        )
-    return posts
+def resolve_posts(*_, title: str = ""):
+    return filter(
+        lambda pst: title.lower() in pst['title'].lower(),
+        posts
+    )
 
 
 @query.field("comments")
@@ -252,10 +255,7 @@ def resolve_comments(*_):
 
 @mutation.field("createUser")
 def resolve_create_user(*_, data):
-    email_taken = len(
-        [user for user in users if user['email'] == data['email']]
-    ) > 0
-    if email_taken:
+    if data['email'] in (usr['email'] for usr in users):
         raise ValueError("Email taken.")
     usr = {
         'id': uuid4(),
@@ -265,12 +265,43 @@ def resolve_create_user(*_, data):
     return usr
 
 
+@mutation.field("deleteUser")
+def resolve_delete_user(*_, id: str):
+    # Delete the user
+    for usr_ind, usr in enumerate(users):
+        if usr['id'] == id:
+            del users[usr_ind]
+            break
+    else:
+        raise ValueError("User not found")
+
+    # Delete user's comments
+    comments_dump = list(comments)  # Use a copy for iteration
+    for cmt_ind, cmt in enumerate(comments_dump):
+        if cmt['author'] == usr['id']:
+            del comments[cmt_ind]
+    # Delete user's posts
+    cnt = 0
+    while cnt < len(posts):
+        if posts[cnt]['author'] == usr['id']:
+            # Delete the comments of the post
+            cnt2 = 0
+            while cnt2 < len(comments):
+                if comments[cnt2]['post'] == posts[cnt]['id']:
+                    del comments[cnt2]
+                else:
+                    cnt2 += 1
+            # Execute post deletion
+            del posts[cnt]
+        else:
+            cnt += 1
+
+    return usr
+
+
 @mutation.field("createPost")
-def resolve_create_post(*_, data):
-    user_exists = len(
-        [usr for usr in users if usr['id'] == data['author']]
-    ) > 0
-    if not user_exists:
+def resolve_create_post(*_, data: dict):
+    if not data['author'] in (usr for usr in users):
         raise ValueError('Author not found.')
     pst = {
         'id': uuid4(),
@@ -280,15 +311,32 @@ def resolve_create_post(*_, data):
     return pst
 
 
+@mutation.field("deletePost")
+def resolve_delete_post(*_, id: str):
+    # Delete the post
+    for pst_ind, pst in enumerate(posts):
+        if pst['id'] == id:
+            del posts[pst_ind]
+            break
+    else:
+        raise ValueError("Post not found")
+
+    # Delete the comments of this post
+    cnt = 0
+    while cnt < len(comments):
+        if comments[cnt]['post'] == pst['id']:
+            del comments[cnt]
+        else:
+            cnt += 1
+
+    return pst
+
+
 @mutation.field("createComment")
 def resolve_create_comment(*_, data):
-    user_exists = len(
-        [usr for usr in users if usr['id'] == data['author']]
-    ) > 0
-    if not user_exists:
+    if not data['author'] in (usr['id'] for usr in users):
         raise ValueError('Author not found.')
-    post_exists = len([pst for pst in posts if pst['id'] == data['post']]) > 0
-    if not post_exists:
+    if not data['post'] in (pst['id'] for pst in posts):
         raise ValueError('Post not found.')
     cmt = {
         'id': uuid4(),
@@ -298,40 +346,66 @@ def resolve_create_comment(*_, data):
     return cmt
 
 
+@mutation.field("deleteComment")
+def resolve_delete_comment(*_, id):
+    for cmt_ind, cmt in enumerate(comments):
+        if cmt['id'] == id:
+            del comments[cmt_ind]
+            break
+    else:
+        raise ValueError("Comment not found")
+    return cmt
+
+
 @user.field("posts")
 def resolve_user_posts(parent: dict, _):
-    return [pst for pst in posts if pst['author'] == parent['id']]
+    return filter(
+        lambda pst: pst['author'] == parent['id'],
+        posts
+    )
 
 
 @user.field("comments")
 def resolve_user_comments(parent: dict, _):
-    return [cmt for cmt in comments if cmt['author'] == parent['id']]
+    return filter(
+        lambda cmt: cmt['author'] == parent['id'],
+        comments
+    )
 
 
 @post.field("author")
 def resolve_post_author(parent: dict, _):
-    for usr in users:
-        if usr['id'] == parent['author']:
-            return usr
+    return first_true(
+        users,
+        None,
+        lambda usr: usr['id'] == parent['author']
+    )
 
 
 @post.field("comments")
 def resolve_post_comments(parent: dict, _):
-    return [cmt for cmt in comments if cmt['post'] == parent['id']]
+    return filter(
+        lambda cmt: cmt['post'] == parent['id'],
+        comments
+    )
 
 
 @comment.field("author")
 def resolve_comment_author(parent: dict, _):
-    for usr in users:
-        if usr['id'] == parent['author']:
-            return usr
+    return first_true(
+        users,
+        None,
+        lambda usr: usr['id'] == parent['author']
+    )
 
 
 @comment.field("post")
 def resolve_comment_post(parent: dict, _):
-    for pst in posts:
-        if pst['id'] == parent['post']:
-            return pst
+    return first_true(
+        users,
+        None,
+        lambda pst: pst['id'] == parent['post']
+    )
 
 
 schema = make_executable_schema(
