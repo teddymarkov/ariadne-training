@@ -7,14 +7,49 @@ mutation = MutationType()
 
 
 @mutation.field("createUser")
-def resolve_create_user(_, info: GraphQLResolveInfo, data):
-    if data['email'] in (usr['email'] for usr in info.context['db'].users):
+def resolve_create_user(_, info: GraphQLResolveInfo, data: dict):
+    users = info.context['db'].users
+
+    # Verify email address is free
+    if data['email'] in (usr['email'] for usr in users):
         raise ValueError("Email taken.")
+
+    # Create the new user
     usr = {
         'id': uuid4(),
         **data,
     }
-    info.context['db'].users.append(usr)
+    users.append(usr)
+
+    return usr
+
+
+@mutation.field("updateUser")
+def resolve_update_user(_, info, id: str, data: dict):
+    name = data.get("name")
+    email = data.get("email")
+    age = data.get("age", False)
+    users = info.context['db'].users
+    # Fetch the user
+    for usr in users:
+        if usr['id'] == id:
+            break
+    else:
+        raise ValueError("User not found")
+
+    # Verify email address is free
+    if email:
+        if email in (t_usr['email'] for t_usr in users):
+            raise ValueError("Email taken.")
+
+    # Update properties
+    if name is not None:
+        usr['name'] = name
+    if email is not None:
+        usr['emial'] = email
+    if age is not False:
+        usr['age'] = age
+
     return usr
 
 
@@ -65,6 +100,36 @@ def resolve_create_post(_, info: GraphQLResolveInfo, data: dict):
     return pst
 
 
+@mutation.field("updatePost")
+def resolve_update_post(_, info: GraphQLResolveInfo, id: str, data: dict):
+    title = data.get("title")
+    body = data.get("body")
+    published = data.get("published")
+    posts = info.context['db'].posts
+
+    # Fetch the post
+    for pst in posts:
+        if pst['id'] == id:
+            break
+    else:
+        raise ValueError("Post not found")
+
+    # Verify title is unique
+    if title:
+        if title in (t_pst['title'] for t_pst in posts):
+            raise ValueError("Title is already taken.")
+
+    # Update properties
+    if title is not None:
+        pst['title'] = title
+    if body is not None:
+        pst['body'] = body
+    if published is not None:
+        pst['published'] = published
+
+    return pst
+
+
 @mutation.field("deletePost")
 def resolve_delete_post(_, info: GraphQLResolveInfo, id: str):
     # Delete the post
@@ -97,6 +162,24 @@ def resolve_create_comment(_, info: GraphQLResolveInfo, data):
         **data,
     }
     info.context['db'].comments.append(cmt)
+    return cmt
+
+
+@mutation.field("updateComment")
+def resolve_update_comment(_, info: GraphQLResolveInfo, id: str, data: dict):
+    text = data.get("text")
+    comments = info.context['db'].comments
+    # Fetch the comment
+    for cmt in comments:
+        if cmt['id'] == id:
+            break
+    else:
+        raise ValueError("Comment not found")
+
+    # Update properties
+    if text is not None:
+        cmt['text'] = text
+
     return cmt
 
 
