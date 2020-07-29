@@ -6,6 +6,6 @@ httptools==0.1.1
 more-itertools==8.2.0
 starlette==0.13.2
 typing-extensions==3.7.4.1
-uvicorn==0.11.3
+uvicorn==0.11.7
 uvloop==0.14.0
 websockets==8.1
